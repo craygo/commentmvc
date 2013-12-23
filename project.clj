@@ -14,11 +14,23 @@
   :source-paths ["src"]
 
   :cljsbuild {
-    :builds [{:id "dev"
-      :source-paths ["src"]
-      :compiler {
-        :output-to "main.js"
-        :output-dir "out"
-        :optimizations :none
-        :source-map true
-        :externs ["om/externs/react.js"]}}]})
+              :builds [{:id "dev"
+                        :source-paths ["src"]
+                        :compiler {
+                                   :output-to "main.js"
+                                   :output-dir "out"
+                                   :optimizations :none
+                                   :source-map true
+                                   :externs ["om/externs/react.js"]}}
+                       {:id "release"
+                        :source-paths ["src"]
+                        :compiler {
+                                   :output-to "app.js"
+                                   :optimizations :advanced
+                                   :pretty-print false
+                                   :output-wrapper false
+                                   :preamble ["om/react.min.js"]
+                                   :externs ["om/externs/react.js"]
+                                   :closure-warnings
+                                   {:non-standard-jsdoc :off}}}
+                       ]})
