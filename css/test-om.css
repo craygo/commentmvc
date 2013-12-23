@@ -1,0 +1,9 @@
+input.edit {
+  display: none;
+}
+input.editing {
+  display: block;
+}
+h2.editing {
+  display: none;
+}
