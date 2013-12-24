@@ -25,7 +25,7 @@
                        {:id "release"
                         :source-paths ["src"]
                         :compiler {
-                                   :output-to "app.js"
+                                   :output-to "main.js"
                                    :optimizations :advanced
                                    :pretty-print false
                                    :output-wrapper false

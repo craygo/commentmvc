@@ -9,12 +9,46 @@
             [clojure.browser.event :as gevent]
             ))
 
+(declare start-edit)
 
-(def app-state (atom {:url "comments.json" :poll-interval 2000 
+;; state
+(def app-state (atom {:url "comments.json" :poll-interval 4000 
                       :comments [{:id (guid) :author "a1" :text "t1"} {:id (guid) :author "a2" :text "t2"}]}))
 
+;; event handlers
+(defn start-edit [old-value message]
+  (assoc old-value :editing true))
+
+(defn update-comment [old-value {:keys [author] :as messag}]
+  (dissoc (assoc old-value :author author) :editing))
+
+;; TODO move to ohm
+(def input-queue (chan))
+
+(def routes [ [:start-edit [:comments :*] start-edit]
+             [:update-comment [:comments :*] update-comment]
+             ])
+
+(defn de-route [type topic]
+  ; TODO implement topic based
+  (-> (filter #(= (first %) type) routes) first last))
+
+(defn handle-mesg [{:keys [type topic] :as mesg}]
+  (let [old-value (get-in @app-state topic)]
+    (if-let [func (de-route type topic)]
+      (let [new-value (func old-value mesg)]
+        (swap! app-state update-in topic (fn [_ nv] nv) new-value)
+        )
+      (.warn js/console (pr-str "handle-mesg: no func for " type topic)))))
+
+(defn put-msg [type topic & opts]
+  (put! input-queue (merge {:type type :topic (:om.core/path (meta topic))} opts)))
+
+;; components
+(def ENTER-KEY 13)
+
 (defn comment-form [{:keys [add-comment ]}]
-  (letfn [(handle-submit [ev owner]
+  (letfn [(handle-submit [_ owner]
             (let [author (.-value (om/get-node owner "author"))
                   text (.-value (om/get-node owner "text"))]
               (add-comment author text)
@@ -25,23 +59,18 @@
                 (dom/input #js {:ref "text" :type "text" :placeholder "Say something..."})
                 (dom/input #js {:type "submit" :value "Post"})))))
 
-(def ENTER-KEY 13)
-
-(defn comment [m]
-  (letfn [(start-edit [e m owner]
-            (om/update! m [:editing] assoc true))
-          (update [e m owner] 
+(defn comment [cmt]
+  (letfn [(update [e cmt owner] 
             (when (= (.-which e) ENTER-KEY)
-              (let [node (om/get-node owner "edit")
-                    nm (dissoc (assoc m :author (.-value node)) :editing)]
-                (om/update! m (constantly nm)))))]
+              (let [node (om/get-node owner "edit")]
+                (put-msg :update-comment cmt {:author (.-value node)}))))]
     (ohm/component-o
       (dom/div #js {:className "comment"}
-               (dom/h2 #js {:ref "author" :onClick #(start-edit % m owner) } 
-                       (if-not (:editing m) 
-                         (:author m)
-                         (dom/input #js {:ref "edit" :onKeyDown #(update % m owner) :defaultValue (:author m)})))
-               (dom/span nil (:text m))))))
+               (dom/h2 #js {:ref "author" :onClick #(put-msg :start-edit cmt) } 
+                       (if-not (:editing cmt) 
+                         (:author cmt)
+                         (dom/input #js {:ref "edit" :onKeyDown #(update % cmt owner) :defaultValue (:author cmt)})))
+               (dom/span nil (:text cmt))))))
 
 #_(defn list-of [component list-in-model]
   (into-array (map #(om/build component list-in-model {:path [%] :key :id}) (range (count list-in-model)))))
@@ -71,7 +100,9 @@
       (will-mount [this owner]
         (let [{:keys [url poll-interval]} app]
           (get-from-server url)
-          (js/setInterval get-from-server poll-interval url)))
+          (js/setInterval get-from-server poll-interval url)
+          (go (while true
+                (handle-mesg (<! input-queue))))))
       om/IRender
       (render [_ _]
         (dom/div #js {:className "commentBox"} 
