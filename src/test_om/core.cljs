@@ -9,8 +9,6 @@
             [clojure.browser.event :as gevent]
             ))
 
-(declare start-edit)
-
 ;; state
 (def app-state (atom {:url "comments.json" :poll-interval 4000 
                       :comments [{:id (guid) :author "a1" :text "t1"} {:id (guid) :author "a2" :text "t2"}]}))
@@ -23,16 +21,16 @@
   (dissoc (assoc old-value :author author) :editing))
 
 (defn add-comment [old-value {:keys [author text] :as message}]
-  (.info js/console (pr-str "add-comment " old-value message))
+  ;(.info js/console (pr-str "add-comment " old-value message))
   (conj old-value {:id (guid) :author author :text text}))
-
-;; TODO move to ohm
-(def input-queue (chan))
 
 (def routes [[:start-edit [:comments :*] start-edit]
              [:update-comment [:comments :*] update-comment]
              [:add-comment [:comments] add-comment]
              ])
+
+;; TODO move to ohm
+(def input-queue (chan))
 
 (defn de-route [type topic]
   ; TODO implement topic based
@@ -47,13 +45,13 @@
       (.warn js/console (pr-str "handle-mesg: no func for " type topic)))))
 
 (defn put-msg [type cursor & opts]
-  (.info js/console (pr-str "put-msg " type cursor opts))
+  ;(.info js/console (pr-str "put-msg " type cursor opts))
   (put! input-queue (merge {:type type :topic (:om.core/path (meta cursor))} opts)))
 
 (defn extract-refs [owner]
   (let [ks (keys (js->clj (.-refs owner)))
         m (into {} (map #(vector (keyword %) (.-value (om/get-node owner %))) ks))]
-    (.info js/console (pr-str "handle-submit " ks m))
+    ;(.info js/console (pr-str "handle-submit " ks m))
     m))
 
 ;; components
@@ -81,9 +79,6 @@
                          (:author cmt)
                          (dom/input #js {:ref "edit" :onKeyDown #(update % cmt owner) :defaultValue (:author cmt)})))
                (dom/span nil (:text cmt))))))
-
-#_(defn list-of [component list-in-model]
-  (into-array (map #(om/build component list-in-model {:path [%] :key :id}) (range (count list-in-model)))))
 
 (defn comment-list [comments]
   (om/component
