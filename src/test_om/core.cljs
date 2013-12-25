@@ -19,14 +19,19 @@
 (defn start-edit [old-value message]
   (assoc old-value :editing true))
 
-(defn update-comment [old-value {:keys [author] :as messag}]
+(defn update-comment [old-value {:keys [author] :as message}]
   (dissoc (assoc old-value :author author) :editing))
+
+(defn add-comment [old-value {:keys [author text] :as message}]
+  (.info js/console (pr-str "add-comment " old-value message))
+  (conj old-value {:id (guid) :author author :text text}))
 
 ;; TODO move to ohm
 (def input-queue (chan))
 
-(def routes [ [:start-edit [:comments :*] start-edit]
+(def routes [[:start-edit [:comments :*] start-edit]
              [:update-comment [:comments :*] update-comment]
+             [:add-comment [:comments] add-comment]
              ])
 
 (defn de-route [type topic]
@@ -41,17 +46,22 @@
         )
       (.warn js/console (pr-str "handle-mesg: no func for " type topic)))))
 
-(defn put-msg [type topic & opts]
-  (put! input-queue (merge {:type type :topic (:om.core/path (meta topic))} opts)))
+(defn put-msg [type cursor & opts]
+  (.info js/console (pr-str "put-msg " type cursor opts))
+  (put! input-queue (merge {:type type :topic (:om.core/path (meta cursor))} opts)))
+
+(defn form-helper []
+  )
 
 ;; components
 (def ENTER-KEY 13)
 
-(defn comment-form [{:keys [add-comment ]}]
+(defn comment-form [comments]
   (letfn [(handle-submit [_ owner]
+            ; TODO auto-pull refs from owner
             (let [author (.-value (om/get-node owner "author"))
                   text (.-value (om/get-node owner "text"))]
-              (add-comment author text)
+              (put-msg :add-comment comments {:author author :text text})
               false))]
     (ohm/component-o
       (dom/form #js {:className "commentForm" :onSubmit #(handle-submit % owner)}
@@ -84,6 +94,7 @@
   (.error js/console "fail: " ev))
 
 (defn comment-box [app]
+  ; TODO put in service
   (letfn [(server-res [ev]
             (let [res (js->clj (.getResponseJson (.-target ev)) :keywordize-keys true)
                   res (map #(assoc % :id (guid)) res)]
@@ -92,9 +103,7 @@
             (let [xhr (net/xhr-connection)]
               (gevent/listen xhr "success" server-res)
               (gevent/listen xhr "error" fail)
-              (net/transmit xhr url)))
-          (add-comment [author text]
-            (om/update! app [:comments] conj {:id (guid) :author author :text text}))]
+              (net/transmit xhr url))) ]
     (reify
       om/IWillMount
       (will-mount [this owner]
@@ -108,6 +117,6 @@
         (dom/div #js {:className "commentBox"} 
                  (dom/h1 nil "Comments")
                  (om/build comment-list app {:path [:comments]})
-                 (om/build comment-form {:add-comment add-comment}))))))
+                 (om/build comment-form app {:path [:comments]}))))))
 
 (om/root app-state comment-box (.getElementById js/document "container"))
