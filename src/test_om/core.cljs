@@ -50,19 +50,19 @@
   (.info js/console (pr-str "put-msg " type cursor opts))
   (put! input-queue (merge {:type type :topic (:om.core/path (meta cursor))} opts)))
 
-(defn form-helper []
-  )
+(defn extract-refs [owner]
+  (let [ks (keys (js->clj (.-refs owner)))
+        m (into {} (map #(vector (keyword %) (.-value (om/get-node owner %))) ks))]
+    (.info js/console (pr-str "handle-submit " ks m))
+    m))
 
 ;; components
 (def ENTER-KEY 13)
 
 (defn comment-form [comments]
   (letfn [(handle-submit [_ owner]
-            ; TODO auto-pull refs from owner
-            (let [author (.-value (om/get-node owner "author"))
-                  text (.-value (om/get-node owner "text"))]
-              (put-msg :add-comment comments {:author author :text text})
-              false))]
+            (put-msg :add-comment comments (extract-refs owner))
+            false)]
     (ohm/component-o
       (dom/form #js {:className "commentForm" :onSubmit #(handle-submit % owner)}
                 (dom/input #js {:ref "author" :type "text" :placeholder "Your name" })
