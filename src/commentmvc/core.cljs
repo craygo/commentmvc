@@ -1,8 +1,8 @@
-(ns test-om.core
+(ns commentmvc.core
   (:require [om.core :as om :include-macros true]
             [om.dom :as dom :include-macros true]
             [cljs.core.async :refer [put! <! chan]]
-            [test-om.utils :refer [guid]]
+            [commentmvc.utils :refer [guid]]
             [clojure.browser.net :as net]
             [clojure.browser.event :as gevent]
             [clojure.browser.repl :as repl]

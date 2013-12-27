@@ -1,4 +1,4 @@
-(ns test-om.utils
+(ns commentmvc.utils
   (:require [cljs.reader :as reader])
   (:import [goog.ui IdGenerator]))
 
