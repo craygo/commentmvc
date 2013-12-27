@@ -1,6 +1,6 @@
-(defproject test-om "0.1.0-SNAPSHOT"
-  :description "FIXME: write this!"
-  :url "http://example.com/FIXME"
+(defproject commentmvc "0.1.0-SNAPSHOT"
+  :description "ReactJS comment tutorial app with Om in a Pedestal style"
+  :url "https://github.com/craygo/commentmvc"
 
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [org.clojure/clojurescript "0.0-2127"]

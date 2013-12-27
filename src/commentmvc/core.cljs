@@ -33,8 +33,7 @@
   (conj old-value {:id (guid) :author author :text text}))
 
 (defn reset-comments [_ message]
-  (:comments message)
-  )
+  (:comments message))
 
 ;; Pedestal style routes
 (def routes [[:start-edit [:comments :*] start-edit]
