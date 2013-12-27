@@ -5,12 +5,22 @@
             [test-om.utils :refer [guid]]
             [clojure.browser.net :as net]
             [clojure.browser.event :as gevent]
+            [clojure.browser.repl :as repl]
             [rohm.core :as rohm :include-macros true] 
             ))
 
 ;; state
-(def app-state (atom {:url "comments.json" :poll-interval 4000 
+(def app-state (atom {:url "comments.json" :poll-interval 10000 
                       :comments [{:id (guid) :author "a1" :text "t1"} {:id (guid) :author "a2" :text "t2"}]}))
+
+;; validator
+;; can reject changes that would violate global constraints
+(defn valid? [state]
+  (and (->> state :comments (filter #(:editing %)) count (>= 1)) ; only a single comment may be editing at any time
+       ; ...
+       ))
+
+(set-validator! app-state valid?)
 
 ;; Pedestal style input message transformer functions
 (defn start-edit [old-value message]
@@ -20,21 +30,30 @@
   (dissoc (assoc old-value :author author) :editing))
 
 (defn add-comment [old-value {:keys [author text] :as message}]
-  ;(.info js/console (pr-str "add-comment " old-value message))
   (conj old-value {:id (guid) :author author :text text}))
+
+(defn reset-comments [_ message]
+  (:comments message)
+  )
 
 ;; Pedestal style routes
 (def routes [[:start-edit [:comments :*] start-edit]
              [:update-comment [:comments :*] update-comment]
-             [:add-comment [:comments] add-comment]
+             [:add [:comments] add-comment]
+             [:reset [:comments] reset-comments]
              ])
+
+;; Pedestal style effect functions
+;; return collection of messages for the effect queue
+(defn get-server-comments-effect [url]
+  [{:type :read :topic [:comments] :url url}])
 
 ;; components
 (def ENTER-KEY 13)
 
 (defn comment-form [comments]
   (letfn [(handle-submit [_ owner]
-            (rohm/put-msg :add-comment comments (rohm/extract-refs owner))
+            (rohm/put-msg :add comments (rohm/extract-refs owner))
             false)]
     (rohm/component-o
       (dom/form #js {:className "commentForm" :onSubmit #(handle-submit % owner)}
@@ -70,26 +89,34 @@
              (om/build comment-list comments)
              (om/build comment-form comments))))
 
-(defn comment-app [app]
-  ; TODO put in service
+;; service, can go into separate namespace
+;; input-queue not used directly but via rohm/put-msg
+(defn comment-service [message input-queue]
   (letfn [(server-res [ev]
             (let [res (js->clj (.getResponseJson (.-target ev)) :keywordize-keys true)
-                  res (map #(assoc % :id (guid)) res)]
-              (om/update! app [:comments] (comp vec (fn [a b] b)) res)))
+                  res (vec (map #(assoc % :id (guid)) res))]
+              (rohm/put-msg :reset [:comments] {:comments res})))
           (get-from-server [url]
             (let [xhr (net/xhr-connection)]
               (gevent/listen xhr "success" server-res)
               (gevent/listen xhr "error" fail)
-              (net/transmit xhr url))) ]
-    (reify
-      om/IWillMount
-      (will-mount [this owner]
-        (let [{:keys [url poll-interval]} app]
-          (get-from-server url)
-          (js/setInterval get-from-server poll-interval url)
-          (rohm/handle-messages app-state routes)))
-      om/IRender
-      (render [_ _]
-        (om/build comment-box app {:path [:comments]})))))
+              (net/transmit xhr url)))]
+    ; need some kind of routing here too
+    (if (and (= (:type message) :read) (:url message))
+      (get-from-server (:url message))
+      (.warn js/console (pr-str "comment-service: don't know " message)))))
+
+(defn comment-app [app]
+  (reify
+    om/IWillMount
+    (will-mount [this owner]
+      (let [{:keys [url poll-interval]} app]
+        (rohm/effect-messages (get-server-comments-effect url))
+        (js/setInterval #(rohm/effect-messages (get-server-comments-effect %)) poll-interval url)
+        (rohm/handle-messages app-state routes comment-service)
+        (repl/connect "http://localhost:9000/repl")))
+    om/IRender
+    (render [_ _]
+      (om/build comment-box app {:path [:comments]}))))
 
 (om/root app-state comment-app (.getElementById js/document "container"))
